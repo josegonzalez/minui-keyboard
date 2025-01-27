@@ -25,6 +25,8 @@ FLAGS = -L$(LD_LIBRARY_PATH) -ldl -lmsettings $(LIBS) -l$(SDL) -l$(SDL)_image -l
 all: minui $(PREFIX)/include/msettings.h
 	LD_LIBRARY_PATH=$(LD_LIBRARY_PATH) $(CC) $(SOURCE) -o $(PRODUCT)-$(PLATFORM) $(CFLAGS) $(FLAGS)
 
+setup: minui $(PREFIX)/include/msettings.h
+
 clean:
 	rm -rf $(PRODUCT)-$(PLATFORM)
 
