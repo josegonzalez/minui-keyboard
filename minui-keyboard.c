@@ -4,7 +4,11 @@
 #include <msettings.h>
 #include <stdbool.h>
 #include <argp.h>
+#ifdef USE_SDL2
 #include <SDL2/SDL_ttf.h>
+#else
+#include <SDL/SDL_ttf.h>
+#endif
 
 #include "defines.h"
 #include "api.h"
