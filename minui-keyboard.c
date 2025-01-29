@@ -1,8 +1,9 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <msettings.h>
+#include <signal.h>
 #include <stdbool.h>
+#include <msettings.h>
 #include <argp.h>
 #ifdef USE_SDL2
 #include <SDL2/SDL_ttf.h>
