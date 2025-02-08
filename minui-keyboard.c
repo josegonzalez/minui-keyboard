@@ -299,8 +299,8 @@ void draw_keyboard(SDL_Surface *screen, struct AppState *state)
 
     // draw input field with current text
     // todo: use TTF_SizeUTF8 to compute the width of the input field
-    SDL_Surface *input_placeholder = TTF_RenderUTF8_Blended(font.large, "p", COLOR_WHITE);
-    SDL_Surface *input = TTF_RenderUTF8_Blended(font.large, state->keyboard.current_text, COLOR_WHITE);
+    SDL_Surface *input_placeholder = TTF_RenderUTF8_Blended(font.medium, "p", COLOR_WHITE);
+    SDL_Surface *input = TTF_RenderUTF8_Blended(font.medium, state->keyboard.current_text, COLOR_WHITE);
     SDL_Rect input_pos = {
         (screen->w) / 2,
         input_placeholder->h * 2,
