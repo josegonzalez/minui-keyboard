@@ -230,6 +230,10 @@ void handle_keyboard_input(struct AppState *state)
             }
         }
     }
+    else if (PAD_justReleased(BTN_SELECT))
+    {
+        state->keyboard.layout = (state->keyboard.layout + 1) % 3;
+    }
     else
     {
         // do not redraw if no key was pressed
