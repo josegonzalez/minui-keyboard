@@ -89,6 +89,24 @@ int max(int a, int b)
     return (a > b) ? a : b;
 }
 
+// count_row_length returns the number of non-empty characters in a keyboard row
+int count_row_length(const char *(*layout)[14], int row) {
+    int length = 0;
+    for (int i = 0; i < 14; i++) {
+        if (layout[row][i][0] != '\0') {
+            length++;
+        }
+    }
+    return length;
+}
+
+// calculate_column_offset returns how much to adjust the column when moving between rows
+int calculate_column_offset(const char *(*layout)[14], int from_row, int to_row) {
+    int from_length = count_row_length(layout, from_row);
+    int to_length = count_row_length(layout, to_row);
+    return (to_length - from_length) / 2;
+}
+
 // handle_keyboard_input interprets keyboard input events and mutates app state
 void handle_keyboard_input(struct AppState *state)
 {
@@ -117,10 +135,12 @@ void handle_keyboard_input(struct AppState *state)
     {
         if (state->keyboard.row > 0)
         {
+            state->keyboard.col += calculate_column_offset(current_layout, state->keyboard.row, state->keyboard.row - 1);
             state->keyboard.row--;
         }
         else
         {
+            state->keyboard.col += calculate_column_offset(current_layout, 0, max_row - 1);
             state->keyboard.row = max_row - 1;
             while (state->keyboard.col >= 0 && current_layout[state->keyboard.row][state->keyboard.col][0] == '\0')
             {
@@ -140,6 +160,7 @@ void handle_keyboard_input(struct AppState *state)
     {
         if (state->keyboard.row < max_row - 1)
         {
+            state->keyboard.col += calculate_column_offset(current_layout, state->keyboard.row, state->keyboard.row + 1);
             state->keyboard.row++;
             while (state->keyboard.col >= 0 && current_layout[state->keyboard.row][state->keyboard.col][0] == '\0')
             {
@@ -156,6 +177,7 @@ void handle_keyboard_input(struct AppState *state)
         }
         else
         {
+            state->keyboard.col += calculate_column_offset(current_layout, max_row - 1, 0);
             state->keyboard.row = 0;
         }
     }
