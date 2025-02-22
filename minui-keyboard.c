@@ -135,7 +135,19 @@ void handle_keyboard_input(struct AppState *state)
     {
         if (state->keyboard.row > 0)
         {
-            state->keyboard.col += calculate_column_offset(current_layout, state->keyboard.row, state->keyboard.row - 1);
+            int offset = calculate_column_offset(current_layout, state->keyboard.row, state->keyboard.row - 1);
+            if (state->keyboard.row == 4 && count_row_length(current_layout, state->keyboard.row - 1) % 2 == 0)
+            {
+                if (state->keyboard.col == 0)
+                {
+                    offset -= 1;
+                }
+                else if (state->keyboard.col == 2)
+                {
+                    offset += 1;
+                }
+            }
+            state->keyboard.col += offset;
             state->keyboard.row--;
         }
         else
@@ -160,7 +172,17 @@ void handle_keyboard_input(struct AppState *state)
     {
         if (state->keyboard.row < max_row - 1)
         {
-            state->keyboard.col += calculate_column_offset(current_layout, state->keyboard.row, state->keyboard.row + 1);
+            int offset = calculate_column_offset(current_layout, state->keyboard.row, state->keyboard.row + 1);
+            int this_row_length = count_row_length(current_layout, state->keyboard.row);
+            
+            if (state->keyboard.row + 1 == 4 && this_row_length % 2 == 0)
+            {
+                if (state->keyboard.col > (this_row_length / 2) - 1)
+                {
+                    offset -= 1;
+                }
+            }
+            state->keyboard.col += offset;
             state->keyboard.row++;
             while (state->keyboard.col >= 0 && current_layout[state->keyboard.row][state->keyboard.col][0] == '\0')
             {
