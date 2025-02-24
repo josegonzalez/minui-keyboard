@@ -90,21 +90,111 @@ int max(int a, int b)
 }
 
 // count_row_length returns the number of non-empty characters in a keyboard row
-int count_row_length(const char *(*layout)[14], int row) {
+int count_row_length(const char *(*layout)[14], int row)
+{
     int length = 0;
-    for (int i = 0; i < 14; i++) {
-        if (layout[row][i][0] != '\0') {
+    for (int i = 0; i < 14; i++)
+    {
+        if (layout[row][i][0] != '\0')
+        {
             length++;
         }
     }
     return length;
 }
 
-// calculate_column_offset returns how much to adjust the column when moving between rows
-int calculate_column_offset(const char *(*layout)[14], int from_row, int to_row) {
+// calculate_column_offset returns the offset between two rows
+int calculate_column_offset(const char *(*layout)[14], int from_row, int to_row) 
+{
     int from_length = count_row_length(layout, from_row);
     int to_length = count_row_length(layout, to_row);
     return (to_length - from_length) / 2;
+}
+
+// adjust_offset_exit_last_row adjusts offset when exiting the last row
+int adjust_offset_exit_last_row(int offset, int column) 
+{
+    if (column == 0)
+    {
+        return offset - 1;
+    } 
+    else if (column == 2)
+    {
+        return offset + 1;
+    }
+    return offset;  // Center stays fixed
+}
+
+// adjust_offset_enter_last_row adjusts offset when entering the last row
+int adjust_offset_enter_last_row(int offset, int col, int center)
+{
+    if (col > center)
+    {
+        return offset - 1;
+    }
+    else if (col < center)
+    {
+        return offset + 1;
+    }
+    else
+    {
+        return offset;
+    }
+}
+
+// get_current_layout returns the appropriate keyboard layout array based on the current state
+const char *(*get_current_layout(struct AppState *state))[14] 
+{
+    if (state->keyboard.layout == 0)
+    {
+        return keyboard_layout_lowercase;
+    } 
+    else if (state->keyboard.layout == 1)
+    {
+        return keyboard_layout_uppercase;
+    }
+    else
+    {
+        return keyboard_layout_special;
+    }
+}
+
+// cursor_rescue ensures the cursor lands on a valid key and doesn't get lost in empty space
+void cursor_rescue(struct AppState *state, const char *(*current_layout)[14], int num_rows) 
+{
+    int num_cols = sizeof(current_layout[0]) / sizeof(current_layout[0][0]);
+
+    // Ensure row doesn't exceed boundaries
+    if (state->keyboard.row < 0)
+    {
+        state->keyboard.row = 0;
+    } 
+    else if (state->keyboard.row > num_rows - 1)
+    {
+        state->keyboard.row = num_rows - 1;
+    }
+
+    // Ensure column doesn't exceed maximum
+    if (state->keyboard.col > num_cols - 1)
+    {
+        state->keyboard.col = num_cols - 1;
+    }
+
+    // Move left until we find a non-empty cell
+    while (state->keyboard.col >= 0 && current_layout[state->keyboard.row][state->keyboard.col][0] == '\0')
+    {
+        state->keyboard.col--;
+    }
+
+    // If we went too far left, move right until we find a non-empty cell
+    if (state->keyboard.col < 0)
+    {
+        state->keyboard.col = 0;
+        while (current_layout[state->keyboard.row][state->keyboard.col][0] == '\0')
+        {
+            state->keyboard.col++;
+        }
+    }
 }
 
 // handle_keyboard_input interprets keyboard input events and mutates app state
@@ -114,19 +204,7 @@ void handle_keyboard_input(struct AppState *state)
     state->redraw = 1;
 
     // track current keyboard layout
-    const char *(*current_layout)[14];
-    if (state->keyboard.layout == 0)
-    {
-        current_layout = keyboard_layout_lowercase;
-    }
-    else if (state->keyboard.layout == 1)
-    {
-        current_layout = keyboard_layout_uppercase;
-    }
-    else
-    {
-        current_layout = keyboard_layout_special;
-    }
+    const char *(*current_layout)[14] = get_current_layout(state);
 
     int max_row = 5;
     int max_col = sizeof(current_layout[0]) / sizeof(current_layout[0][0]);
@@ -136,72 +214,53 @@ void handle_keyboard_input(struct AppState *state)
         if (state->keyboard.row > 0)
         {
             int offset = calculate_column_offset(current_layout, state->keyboard.row, state->keyboard.row - 1);
-            if (state->keyboard.row == 4 && count_row_length(current_layout, state->keyboard.row - 1) % 2 == 0)
+
+            if (state->keyboard.row == max_row - 1)
             {
-                if (state->keyboard.col == 0)
-                {
-                    offset -= 1;
-                }
-                else if (state->keyboard.col == 2)
-                {
-                    offset += 1;
-                }
+                offset = adjust_offset_exit_last_row(offset, state->keyboard.col);
             }
             state->keyboard.col += offset;
             state->keyboard.row--;
         }
         else
         {
-            state->keyboard.col += calculate_column_offset(current_layout, 0, max_row - 1);
+            int offset = calculate_column_offset(current_layout, 0, max_row - 1);
+            int row_length = count_row_length(current_layout, 0);
+            int center = (row_length - 1 ) / 2;
+
+            if (!((row_length & 1) == 0 && state->keyboard.col == center - 1))
+            {
+                offset = adjust_offset_enter_last_row(offset, state->keyboard.col, center);
+            }
+            state->keyboard.col += offset;
             state->keyboard.row = max_row - 1;
-            while (state->keyboard.col >= 0 && current_layout[state->keyboard.row][state->keyboard.col][0] == '\0')
-            {
-                state->keyboard.col--;
-            }
-            if (state->keyboard.col < 0)
-            {
-                state->keyboard.col = 0;
-                while (current_layout[state->keyboard.row][state->keyboard.col][0] == '\0')
-                {
-                    state->keyboard.col++;
-                }
-            }
         }
+        cursor_rescue(state, current_layout, max_row);
     }
     else if (PAD_justRepeated(BTN_DOWN))
     {
         if (state->keyboard.row < max_row - 1)
         {
             int offset = calculate_column_offset(current_layout, state->keyboard.row, state->keyboard.row + 1);
-            int this_row_length = count_row_length(current_layout, state->keyboard.row);
-            
-            if (state->keyboard.row + 1 == 4 && this_row_length % 2 == 0)
+            int row_length = count_row_length(current_layout, state->keyboard.row);
+            int center = (row_length - 1) / 2;
+
+            if (state->keyboard.row + 1 == max_row - 1 && (state->keyboard.col > center || (row_length & 1 && state->keyboard.col < center)))
             {
-                if (state->keyboard.col > (this_row_length / 2) - 1)
-                {
-                    offset -= 1;
-                }
+                offset = adjust_offset_enter_last_row(offset, state->keyboard.col, center);
             }
             state->keyboard.col += offset;
             state->keyboard.row++;
-            while (state->keyboard.col >= 0 && current_layout[state->keyboard.row][state->keyboard.col][0] == '\0')
-            {
-                state->keyboard.col--;
-            }
-            if (state->keyboard.col < 0)
-            {
-                state->keyboard.col = 0;
-                while (current_layout[state->keyboard.row][state->keyboard.col][0] == '\0')
-                {
-                    state->keyboard.col++;
-                }
-            }
         }
         else
         {
-            state->keyboard.col += calculate_column_offset(current_layout, max_row - 1, 0);
+            int offset = calculate_column_offset(current_layout, max_row - 1, 0);
+
+            offset = adjust_offset_exit_last_row(offset, state->keyboard.col);
+            state->keyboard.col += offset;
             state->keyboard.row = 0;
         }
+        cursor_rescue(state, current_layout, max_row);
     }
     else if (PAD_justRepeated(BTN_LEFT))
     {
@@ -277,6 +336,8 @@ void handle_keyboard_input(struct AppState *state)
     else if (PAD_justReleased(BTN_SELECT))
     {
         state->keyboard.layout = (state->keyboard.layout + 1) % 3;
+        current_layout = get_current_layout(state);
+        cursor_rescue(state, current_layout, max_row);
     }
     else
     {
