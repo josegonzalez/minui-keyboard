@@ -15,20 +15,16 @@ on:
           - minor
           - major
 
-env:
-  GITHUB_ACCESS_TOKEN: ${{ secrets.MINUI_ACCESS_TOKEN }}
-
 jobs:
   bump-version:
     name: bump-version
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4.1.4
+        uses: actions/checkout@v4.2.2
         with:
           fetch-depth: 0
-          token: ${{ env.GITHUB_ACCESS_TOKEN }}
 
       - name: Get Latest Tag
         id: latest-tag
@@ -44,8 +40,8 @@ jobs:
 
       - name: Create and Push Tag
         run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
+          git config --global user.email "action@github.com"
+          git config --global user.name "GitHub Action"
           git tag "$GIT_NEXT_TAG"
           git push origin "$GIT_NEXT_TAG"
         env:
