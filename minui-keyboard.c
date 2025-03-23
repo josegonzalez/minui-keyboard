@@ -104,7 +104,7 @@ int count_row_length(const char *(*layout)[14], int row)
 }
 
 // calculate_column_offset returns the offset between two rows
-int calculate_column_offset(const char *(*layout)[14], int from_row, int to_row) 
+int calculate_column_offset(const char *(*layout)[14], int from_row, int to_row)
 {
     int from_length = count_row_length(layout, from_row);
     int to_length = count_row_length(layout, to_row);
@@ -112,17 +112,17 @@ int calculate_column_offset(const char *(*layout)[14], int from_row, int to_row)
 }
 
 // adjust_offset_exit_last_row adjusts offset when exiting the last row
-int adjust_offset_exit_last_row(int offset, int column) 
+int adjust_offset_exit_last_row(int offset, int column)
 {
     if (column == 0)
     {
         return offset - 1;
-    } 
+    }
     else if (column == 2)
     {
         return offset + 1;
     }
-    return offset;  // Center stays fixed
+    return offset; // Center stays fixed
 }
 
 // adjust_offset_enter_last_row adjusts offset when entering the last row
@@ -143,12 +143,12 @@ int adjust_offset_enter_last_row(int offset, int col, int center)
 }
 
 // get_current_layout returns the appropriate keyboard layout array based on the current state
-const char *(*get_current_layout(struct AppState *state))[14] 
+const char *(*get_current_layout(struct AppState *state))[14]
 {
     if (state->keyboard.layout == 0)
     {
         return keyboard_layout_lowercase;
-    } 
+    }
     else if (state->keyboard.layout == 1)
     {
         return keyboard_layout_uppercase;
@@ -160,7 +160,7 @@ const char *(*get_current_layout(struct AppState *state))[14]
 }
 
 // cursor_rescue ensures the cursor lands on a valid key and doesn't get lost in empty space
-void cursor_rescue(struct AppState *state, const char *(*current_layout)[14], int num_rows) 
+void cursor_rescue(struct AppState *state, const char *(*current_layout)[14], int num_rows)
 {
     int num_cols = sizeof(current_layout[0]) / sizeof(current_layout[0][0]);
 
@@ -168,7 +168,7 @@ void cursor_rescue(struct AppState *state, const char *(*current_layout)[14], in
     if (state->keyboard.row < 0)
     {
         state->keyboard.row = 0;
-    } 
+    }
     else if (state->keyboard.row > num_rows - 1)
     {
         state->keyboard.row = num_rows - 1;
@@ -226,7 +226,7 @@ void handle_keyboard_input(struct AppState *state)
         {
             int offset = calculate_column_offset(current_layout, 0, max_row - 1);
             int row_length = count_row_length(current_layout, 0);
-            int center = (row_length - 1 ) / 2;
+            int center = (row_length - 1) / 2;
 
             if (!((row_length & 1) == 0 && state->keyboard.col == center - 1))
             {
@@ -532,22 +532,48 @@ void draw_screen(SDL_Surface *screen, struct AppState *state)
     state->redraw = 0;
 }
 
+// suppress_output suppresses stdout and stderr
+// returns a single integer containing both file descriptors
+int suppress_output(void)
+{
+    int stdout_fd = dup(STDOUT_FILENO);
+    int stderr_fd = dup(STDERR_FILENO);
+
+    int dev_null_fd = open("/dev/null", O_WRONLY);
+    dup2(dev_null_fd, STDOUT_FILENO);
+    dup2(dev_null_fd, STDERR_FILENO);
+    close(dev_null_fd);
+
+    return (stdout_fd << 16) | stderr_fd;
+}
+
+// restore_output restores stdout and stderr to the original file descriptors
+void restore_output(int saved_fds)
+{
+    int stdout_fd = (saved_fds >> 16) & 0xFFFF;
+    int stderr_fd = saved_fds & 0xFFFF;
+
+    fflush(stdout);
+    fflush(stderr);
+
+    dup2(stdout_fd, STDOUT_FILENO);
+    dup2(stderr_fd, STDERR_FILENO);
+
+    close(stdout_fd);
+    close(stderr_fd);
+}
+
 // swallow_stdout_from_function swallows stdout from a function
 // this is useful for suppressing output from a function
 // that we don't want to see in the log file
 // the InitSettings() function is an example of this (some implementations print to stdout)
 void swallow_stdout_from_function(void (*func)(void))
 {
-    int original_stdout = dup(STDOUT_FILENO);
-    int dev_null = open("/dev/null", O_WRONLY);
-
-    dup2(dev_null, STDOUT_FILENO);
-    close(dev_null);
+    int saved_fds = suppress_output();
 
     func();
 
-    dup2(original_stdout, STDOUT_FILENO);
-    close(original_stdout);
+    restore_output(saved_fds);
 }
 
 void signal_handler(int signal)
