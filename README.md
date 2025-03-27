@@ -26,6 +26,11 @@ minui-keyboard > output.txt
 # capture output to a variable for use in a shell script
 output=$(minui-keyboard)
 
+# you can also specify a location to write to
+# the internal minui sdk sometimes writes to stdout
+# depending on platform, so this may be useful
+minui-keyboard --write-location file.txt
+
 # specify a title for the keyboard page
 # by default, the title is empty
 minui-keyboard --title "Some Header"
