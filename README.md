@@ -26,13 +26,13 @@ minui-keyboard > output.txt
 # capture output to a variable for use in a shell script
 output=$(minui-keyboard)
 
-# specify a header for the keyboard page
-# by default, the header is empty
-minui-keyboard --header "Some Header"
+# specify a title for the keyboard page
+# by default, the title is empty
+minui-keyboard --title "Some Header"
 
 # hide the wifi and battery icons
-# by default, the hardware status is true
-minui-keyboard --hardware-status false
+# by default, the hardware group is not shown
+minui-keyboard --show-hardware-group
 
 # specify an initial value for the text field
 minui-keyboard --initial-value "Some Initial Value"
