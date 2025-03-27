@@ -97,6 +97,7 @@ struct AppState
     int exit_code;                 // the exit code to return
     int show_hardware_group;       // whether to show the hardware status
     int show_brightness_setting;   // whether to show the brightness or hardware state
+    char write_location[1024];     // the location to write the value to
     struct KeyboardState keyboard; // current keyboard state
 };
 
@@ -549,6 +550,46 @@ void draw_screen(SDL_Surface *screen, struct AppState *state)
     state->redraw = 0;
 }
 
+// write_to_file writes some text to a file
+int write_to_file(const char *filename, const char *text)
+{
+    FILE *file = fopen(filename, "w");
+    if (file == NULL)
+    {
+        log_error("Failed to open write location");
+        return ExitCodeError;
+    }
+
+    int num_elements = strlen(text) / sizeof(text[0]);
+    fwrite(text, sizeof(char), num_elements, file);
+    fclose(file);
+
+    return ExitCodeSuccess;
+}
+
+// write_output writes the final text to the write location
+int write_output(struct AppState *state)
+{
+    if (state->exit_code != ExitCodeSuccess)
+    {
+        return state->exit_code;
+    }
+
+    if (strcmp(state->write_location, "-") != 0)
+    {
+        log_info(state->keyboard.final_text);
+        return state->exit_code;
+    }
+
+    int write_result = write_to_file(state->write_location, state->keyboard.final_text);
+    if (write_result != 0)
+    {
+        return write_result;
+    }
+
+    return state->exit_code;
+}
+
 // suppress_output suppresses stdout and stderr
 // returns a single integer containing both file descriptors
 int suppress_output(void)
@@ -615,16 +656,18 @@ void signal_handler(int signal)
 // - --show-hardware-group (default: false)
 // - --initial-value <value> (default: empty string)
 // - --title <title> (default: empty string)
+// - --write-location <location> (default: "-")
 bool parse_arguments(struct AppState *state, int argc, char *argv[])
 {
     static struct option long_options[] = {
         {"show-hardware-group", no_argument, 0, 'S'},
         {"initial-value", required_argument, 0, 'I'},
         {"title", required_argument, 0, 't'},
+        {"write-location", required_argument, 0, 'w'},
         {0, 0, 0, 0}};
 
     int opt;
-    while ((opt = getopt_long(argc, argv, "S:I:t:", long_options, NULL)) != -1)
+    while ((opt = getopt_long(argc, argv, "S:I:t:w:", long_options, NULL)) != -1)
     {
         switch (opt)
         {
@@ -637,6 +680,9 @@ bool parse_arguments(struct AppState *state, int argc, char *argv[])
             break;
         case 't':
             strncpy(state->keyboard.title, optarg, sizeof(state->keyboard.title) - 1);
+            break;
+        case 'w':
+            strncpy(state->write_location, optarg, sizeof(state->write_location) - 1);
             break;
         default:
             return false;
@@ -685,6 +731,7 @@ int main(int argc, char *argv[])
     // Initialize app state
     char default_keyboard_text[1024] = "";
     char default_keyboard_title[1024] = "";
+    char default_write_location[1024] = "-";
     struct AppState state = {
         .redraw = 1,
         .quitting = 0,
@@ -702,6 +749,7 @@ int main(int argc, char *argv[])
     strncpy(state.keyboard.initial_text, default_keyboard_text, sizeof(state.keyboard.initial_text));
     strncpy(state.keyboard.final_text, default_keyboard_text, sizeof(state.keyboard.final_text));
     strncpy(state.keyboard.title, default_keyboard_title, sizeof(state.keyboard.title));
+    strncpy(state.write_location, default_write_location, sizeof(state.write_location));
 
     if (!parse_arguments(&state, argc, argv))
     {
@@ -784,9 +832,10 @@ int main(int argc, char *argv[])
         }
     }
 
-    if (state.exit_code == ExitCodeSuccess)
+    int exit_code = write_output(&state);
+    if (exit_code != ExitCodeSuccess)
     {
-        log_info(state.keyboard.final_text);
+        return exit_code;
     }
 
     swallow_stdout_from_function(destruct);
