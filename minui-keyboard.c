@@ -1,10 +1,10 @@
-#include <stdio.h>
-#include <unistd.h>
 #include <fcntl.h>
+#include <getopt.h>
+#include <msettings.h>
 #include <signal.h>
 #include <stdbool.h>
-#include <msettings.h>
-#include <argp.h>
+#include <stdio.h>
+#include <unistd.h>
 #ifdef USE_SDL2
 #include <SDL2/SDL_ttf.h>
 #else
@@ -95,7 +95,7 @@ struct AppState
     int redraw;                    // whether the screen needs to be redrawn
     int quitting;                  // whether the app should exit
     int exit_code;                 // the exit code to return
-    int show_hardware_status;      // whether to show the hardware status
+    int show_hardware_group;       // whether to show the hardware status
     int show_brightness_setting;   // whether to show the brightness or hardware state
     struct KeyboardState keyboard; // current keyboard state
 };
@@ -612,72 +612,35 @@ void signal_handler(int signal)
 
 // parse_arguments parses the arguments using argp and updates the app state
 // supports the following flags:
-// - --header <title> (default: empty string)
-// - --hardware-status <true|false> (default: true)
+// - --show-hardware-group (default: false)
 // - --initial-value <value> (default: empty string)
+// - --title <title> (default: empty string)
 bool parse_arguments(struct AppState *state, int argc, char *argv[])
 {
-    struct argp_option options[] = {
-        {"header", 'H', "TITLE", 0, "Set keyboard header/title", 0},
-        {"hardware-status", 'S', "BOOL", 0, "Show hardware status (true/false)", 0},
-        {"initial-value", 'I', "VALUE", 0, "Set initial keyboard value", 0},
-        {0}};
+    static struct option long_options[] = {
+        {"show-hardware-group", no_argument, 0, 'S'},
+        {"initial-value", required_argument, 0, 'I'},
+        {"title", required_argument, 0, 't'},
+        {0, 0, 0, 0}};
 
-    struct arguments
+    int opt;
+    while ((opt = getopt_long(argc, argv, "S:I:t:", long_options, NULL)) != -1)
     {
-        char *header;
-        char *hardware_status;
-        char *initial_value;
-    };
-
-    error_t parse_opt(int key, char *arg, struct argp_state *argp_state)
-    {
-        struct arguments *arguments = argp_state->input;
-
-        switch (key)
+        switch (opt)
         {
-        case 'H':
-            arguments->header = arg;
-            break;
         case 'S':
-            arguments->hardware_status = arg;
+            state->show_hardware_group = 1;
             break;
         case 'I':
-            arguments->initial_value = arg;
+            strncpy(state->keyboard.initial_text, optarg, sizeof(state->keyboard.initial_text) - 1);
+            strncpy(state->keyboard.current_text, optarg, sizeof(state->keyboard.current_text) - 1);
+            break;
+        case 't':
+            strncpy(state->keyboard.title, optarg, sizeof(state->keyboard.title) - 1);
             break;
         default:
-            return ARGP_ERR_UNKNOWN;
+            return false;
         }
-        return 0;
-    }
-
-    struct argp argp = {options, parse_opt, 0, 0};
-
-    struct arguments arguments = {0};
-    argp_parse(&argp, argc, argv, 0, 0, &arguments);
-
-    // Apply parsed arguments to state
-    if (arguments.header)
-    {
-        strncpy(state->keyboard.title, arguments.header, sizeof(state->keyboard.title) - 1);
-    }
-
-    if (arguments.hardware_status)
-    {
-        if (strcmp(arguments.hardware_status, "true") == 0)
-        {
-            state->show_hardware_status = 1;
-        }
-        else if (strcmp(arguments.hardware_status, "false") == 0)
-        {
-            state->show_hardware_status = 0;
-        }
-    }
-
-    if (arguments.initial_value)
-    {
-        strncpy(state->keyboard.initial_text, arguments.initial_value, sizeof(state->keyboard.initial_text) - 1);
-        strncpy(state->keyboard.current_text, arguments.initial_value, sizeof(state->keyboard.current_text) - 1);
     }
 
     return true;
@@ -727,16 +690,18 @@ int main(int argc, char *argv[])
         .quitting = 0,
         .exit_code = ExitCodeSuccess,
         .show_brightness_setting = 0,
-        .show_hardware_status = 1,
+        .show_hardware_group = 0,
         .keyboard = {
             .display = true,
             .row = 0,
             .col = 0,
-            .current_text = *default_keyboard_text,
-            .initial_text = *default_keyboard_text,
-            .final_text = *default_keyboard_text,
-            .layout = 0,
-            .title = *default_keyboard_title}};
+            .layout = 0}};
+
+    // assign the default values to the app state
+    strncpy(state.keyboard.current_text, default_keyboard_text, sizeof(state.keyboard.current_text));
+    strncpy(state.keyboard.initial_text, default_keyboard_text, sizeof(state.keyboard.initial_text));
+    strncpy(state.keyboard.final_text, default_keyboard_text, sizeof(state.keyboard.final_text));
+    strncpy(state.keyboard.title, default_keyboard_title, sizeof(state.keyboard.title));
 
     if (!parse_arguments(&state, argc, argv))
     {
@@ -793,7 +758,7 @@ int main(int argc, char *argv[])
             GFX_clear(screen);
 
             // optionally display hardware status
-            if (state.show_hardware_status)
+            if (state.show_hardware_group)
             {
                 // draw the hardware information in the top-right
                 GFX_blitHardwareGroup(screen, state.show_brightness_setting);
