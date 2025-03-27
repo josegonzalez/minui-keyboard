@@ -17,6 +17,23 @@
 
 SDL_Surface *screen = NULL;
 
+enum list_result_t
+{
+    ExitCodeSuccess = 0,
+    ExitCodeError = 1,
+    ExitCodeCancelButton = 2,
+    ExitCodeMenuButton = 3,
+    ExitCodeActionButton = 4,
+    ExitCodeInactionButton = 5,
+    ExitCodeStartButton = 6,
+    ExitCodeParseError = 10,
+    ExitCodeSerializeError = 11,
+    ExitCodeTimeout = 124,
+    ExitCodeKeyboardInterrupt = 130,
+    ExitCodeSigterm = 143,
+};
+typedef int ExitCode;
+
 // log_error logs a message to stderr for debugging purposes
 void log_error(const char *msg)
 {
@@ -723,7 +740,10 @@ int main(int argc, char *argv[])
             .layout = 0,
             .title = *default_keyboard_title}};
 
-    parse_arguments(&state, argc, argv);
+    if (!parse_arguments(&state, argc, argv))
+    {
+        return ExitCodeError;
+    }
 
     // get initial wifi state
     int was_online = PLAT_isOnline();
