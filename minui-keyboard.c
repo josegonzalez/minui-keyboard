@@ -313,7 +313,7 @@ void handle_keyboard_input(struct AppState *state)
         state->keyboard.display = !state->keyboard.display;
         state->redraw = 1;
         state->quitting = 1;
-        state->exit_code = EXIT_SUCCESS;
+        state->exit_code = ExitCodeSuccess;
     }
     else if (PAD_justReleased(BTN_B))
     {
@@ -342,7 +342,7 @@ void handle_keyboard_input(struct AppState *state)
                 strcpy(state->keyboard.final_text, state->keyboard.current_text);
                 state->keyboard.display = !state->keyboard.display;
                 state->quitting = 1;
-                state->exit_code = EXIT_SUCCESS;
+                state->exit_code = ExitCodeSuccess;
             }
             else
             {
@@ -598,11 +598,15 @@ void signal_handler(int signal)
     // if the signal is a ctrl+c, exit with code 130
     if (signal == SIGINT)
     {
-        exit(130);
+        exit(ExitCodeKeyboardInterrupt);
+    }
+    else if (signal == SIGTERM)
+    {
+        exit(ExitCodeSigterm);
     }
     else
     {
-        exit(1);
+        exit(ExitCodeError);
     }
 }
 
@@ -715,19 +719,13 @@ void destruct()
 // main is the entry point for the app
 int main(int argc, char *argv[])
 {
-    // swallow all stdout from init calls
-    // MinUI will sometimes randomly log to stdout
-    swallow_stdout_from_function(init);
-
-    signal(SIGINT, signal_handler);
-
     // Initialize app state
     char default_keyboard_text[1024] = "";
     char default_keyboard_title[1024] = "";
     struct AppState state = {
         .redraw = 1,
         .quitting = 0,
-        .exit_code = EXIT_SUCCESS,
+        .exit_code = ExitCodeSuccess,
         .show_brightness_setting = 0,
         .show_hardware_status = 1,
         .keyboard = {
@@ -744,6 +742,13 @@ int main(int argc, char *argv[])
     {
         return ExitCodeError;
     }
+
+    // swallow all stdout from init calls
+    // MinUI will sometimes randomly log to stdout
+    swallow_stdout_from_function(init);
+
+    signal(SIGINT, signal_handler);
+    signal(SIGTERM, signal_handler);
 
     // get initial wifi state
     int was_online = PLAT_isOnline();
@@ -814,7 +819,7 @@ int main(int argc, char *argv[])
         }
     }
 
-    if (state.exit_code == EXIT_SUCCESS)
+    if (state.exit_code == ExitCodeSuccess)
     {
         log_info(state.keyboard.final_text);
     }
