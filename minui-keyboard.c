@@ -575,16 +575,17 @@ int write_output(struct AppState *state)
         return state->exit_code;
     }
 
-    if (strcmp(state->write_location, "-") != 0)
+    if (strcmp(state->write_location, "-") == 0)
     {
         log_info(state->keyboard.final_text);
-        return state->exit_code;
     }
-
-    int write_result = write_to_file(state->write_location, state->keyboard.final_text);
-    if (write_result != 0)
+    else
     {
-        return write_result;
+        int write_result = write_to_file(state->write_location, state->keyboard.final_text);
+        if (write_result != 0)
+        {
+            return write_result;
+        }
     }
 
     return state->exit_code;
