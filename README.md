@@ -41,6 +41,10 @@ minui-keyboard --show-hardware-group
 
 # specify an initial value for the text field
 minui-keyboard --initial-value "Some Initial Value"
+
+# minui-keyboard will auto-sleep like the normal minui menu by default
+# this can be disabled by setting the --disable-auto-sleep flag
+minui-keyboard --disable-auto-sleep
 ```
 
 ### Exit Codes

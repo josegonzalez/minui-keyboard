@@ -95,6 +95,7 @@ struct AppState
     int redraw;                    // whether the screen needs to be redrawn
     int quitting;                  // whether the app should exit
     int exit_code;                 // the exit code to return
+    bool disable_auto_sleep;       // whether to disable auto sleep
     int show_hardware_group;       // whether to show the hardware status
     int show_brightness_setting;   // whether to show the brightness or hardware state
     char write_location[1024];     // the location to write the value to
@@ -654,6 +655,7 @@ void signal_handler(int signal)
 
 // parse_arguments parses the arguments using argp and updates the app state
 // supports the following flags:
+// - --disable-auto-sleep (default: false)
 // - --show-hardware-group (default: false)
 // - --initial-value <value> (default: empty string)
 // - --title <title> (default: empty string)
@@ -665,10 +667,11 @@ bool parse_arguments(struct AppState *state, int argc, char *argv[])
         {"initial-value", required_argument, 0, 'I'},
         {"title", required_argument, 0, 't'},
         {"write-location", required_argument, 0, 'w'},
+        {"disable-auto-sleep", no_argument, 0, 'U'},
         {0, 0, 0, 0}};
 
     int opt;
-    while ((opt = getopt_long(argc, argv, "S:I:t:w:", long_options, NULL)) != -1)
+    while ((opt = getopt_long(argc, argv, "S:I:t:w:U", long_options, NULL)) != -1)
     {
         switch (opt)
         {
@@ -684,6 +687,9 @@ bool parse_arguments(struct AppState *state, int argc, char *argv[])
             break;
         case 'w':
             strncpy(state->write_location, optarg, sizeof(state->write_location) - 1);
+            break;
+        case 'U':
+            state->disable_auto_sleep = true;
             break;
         default:
             return false;
@@ -737,6 +743,7 @@ int main(int argc, char *argv[])
         .redraw = 1,
         .quitting = 0,
         .exit_code = ExitCodeSuccess,
+        .disable_auto_sleep = false,
         .show_brightness_setting = 0,
         .show_hardware_group = 0,
         .keyboard = {
@@ -770,6 +777,12 @@ int main(int argc, char *argv[])
     // draw the screen at least once
     // handle_keyboard_input sets state.redraw to 0 if no key is pressed
     int was_ever_drawn = 0;
+
+    if (state.disable_auto_sleep)
+    {
+        PWR_disableAutosleep();
+    }
+
     while (!state.quitting)
     {
         // start the frame to ensure GFX_sync() works
