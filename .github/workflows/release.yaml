@@ -91,7 +91,7 @@ jobs:
           subject-path: "${{ steps.binary.outputs.filename }}"
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.binary.outputs.filename }}
           path: ${{ steps.binary.outputs.filename }}
@@ -130,7 +130,7 @@ jobs:
           subject-path: "${{ steps.binary.outputs.filename }}"
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.binary.outputs.filename }}
           path: ${{ steps.binary.outputs.filename }}
