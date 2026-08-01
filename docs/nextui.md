@@ -24,7 +24,10 @@ The Makefile keeps the build platform id (`PLATFORM`) separate from the upstream
 
 `-DPLATFORM` is compiled into the on-device `SYSTEM_PATH` and `USERDATA_PATH` (`.system/<PLATFORM>` and `.userdata/<PLATFORM>`), so it is driven by `WORKSPACE`. A `tg5040-nextui` binary therefore reports `tg5040` at runtime and resolves the same on-card paths as the device firmware.
 
-The only source-level NextUI difference is in `minui-keyboard.c`: under `-DPLATFORM_NEXTUI`, `PLAT_isOnline` is mapped to `PWR_isOnline`, which NextUI's SDK uses for online detection.
+The source-level NextUI differences all live in `minui-keyboard.c`, gated by `-DPLATFORM_NEXTUI`:
+
+- `PLAT_isOnline` is mapped to `PWR_isOnline`, which NextUI's SDK uses for online detection.
+- the keyboard is re-colored from the user's NextUI theme (see [Theming](#theming) below).
 
 ### GLES and audio libraries
 
@@ -32,6 +35,25 @@ NextUI toolchains install `libmsettings` and the GLES stack under `/opt/nextui`.
 
 - `tg5040-nextui` and `h700-nextui`: `-lGLESv2 -lsamplerate`
 - `tg5050-nextui` and `my355-nextui`: `-lGLESv2 -lmali -lsamplerate` (their `libGLESv2` is a stub backed by a standalone mali blob that must be linked explicitly)
+
+## Theming
+
+NextUI lets the user pick theme colors and a font. The `-nextui` binaries honor that theme, so the keyboard matches the rest of the NextUI menu instead of the fixed greyscale MinUI palette. MinUI and macOS builds are unaffected: every theme reference is confined to `#ifdef PLATFORM_NEXTUI` helpers in `minui-keyboard.c`, so those builds still use the greyscale palette and compile unchanged.
+
+Nothing new has to be initialized. The existing `GFX_init(MODE_MAIN)` call already runs the NextUI SDK's `CFG_init`, which reads the theme and populates `THEME_COLOR1..7` (screen-mapped) and `THEME_COLOR1_255..7_255` (packed `0xRRGGBBAA`), the themed `font.*`, and the themed clear color. The app just references those globals when drawing. NextUI's color slots (`config.h`) map to the keyboard as follows:
+
+| Theme slot (default)              | Where it is used                                              |
+|-----------------------------------|--------------------------------------------------------------|
+| `COLOR_MAIN` (white)              | the focused key's background                                 |
+| `COLOR_ACCENT2` (dark navy)       | the input field background and unfocused key backgrounds     |
+| `COLOR_LIST_TEXT` (white)         | the title, the input field text, and unfocused key text      |
+| `COLOR_LIST_TEXT_SELECTED` (black)| the focused key's text                                       |
+| `COLOR_HINT` (white)              | the button hints (already themed by the SDK's `GFX_blitButtonGroup`) |
+| `COLOR_BACKGROUND` (black)        | the screen background                                        |
+
+The background is not drawn by the app: `GFX_init(MODE_MAIN)` sets the clear color to `COLOR_BACKGROUND`, so the existing `GFX_clear` fills the themed background automatically. Fonts follow the theme the same way, since `GFX_init` loads the themed font into `font.*`. Under the default theme the result looks the same as the MinUI greyscale; the theme only diverges once the user customizes it.
+
+The theming is entirely gated on `-DPLATFORM_NEXTUI`. `tests/makefile.bats` asserts that gate per platform, and the CI matrix that builds each `-nextui` binary in its `savant/minui-toolchain:<device>-nextui` container is the integration test for the themed compile and link.
 
 ## Building
 
@@ -46,7 +68,7 @@ This produces `minui-keyboard-tg5040-nextui`.
 
 ## Testing the wiring
 
-`tests/makefile.bats` asserts the per-platform Makefile wiring (upstream repo, version, workspace, `-DPLATFORM_NEXTUI`, device id, sources, and GLES libs) by introspecting the Makefile with `make print-<VAR> PLATFORM=<p>`. It needs neither a toolchain nor a cloned upstream tree:
+`tests/makefile.bats` asserts the per-platform Makefile wiring (upstream repo, version, workspace, `-DPLATFORM_NEXTUI`, device id, sources, and GLES libs) by introspecting the Makefile with `make print-<VAR> PLATFORM=<p>`. It also asserts the theming gate: every NextUI variant defines `-DPLATFORM_NEXTUI` and the macOS build does not. It needs neither a toolchain nor a cloned upstream tree:
 
 ```bash
 bats tests/makefile.bats

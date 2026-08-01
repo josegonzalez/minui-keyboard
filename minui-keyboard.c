@@ -20,6 +20,73 @@
 #define PLAT_isOnline PWR_isOnline
 #endif
 
+// Theme helpers. The -nextui builds honor the user's NextUI theme colors (exposed
+// by the SDK as THEME_COLOR* / THEME_COLOR*_255 after GFX_init loads the theme),
+// while the MinUI/macOS builds keep the greyscale palette. Every NextUI-only symbol
+// (THEME_COLOR*, uintToColour) is confined to these helpers behind PLATFORM_NEXTUI
+// so the other builds compile unchanged. The keyboard background is not handled
+// here: GFX_init(MODE_MAIN) already sets the clear color to the theme background on
+// NextUI, so GFX_clear paints it. Fonts follow the theme too, since GFX_init loads
+// the themed font into font.*.
+
+// theme_title_text_color returns the keyboard title color: the theme's list text
+// under NextUI, white under MinUI.
+static SDL_Color theme_title_text_color(void)
+{
+#ifdef PLATFORM_NEXTUI
+    return uintToColour(THEME_COLOR4_255);
+#else
+    return COLOR_WHITE;
+#endif
+}
+
+// theme_input_bg colors the input field background: the theme's secondary accent
+// track under NextUI, the dark grey under MinUI.
+static uint32_t theme_input_bg(SDL_Surface *dst)
+{
+#ifdef PLATFORM_NEXTUI
+    (void)dst;
+    return THEME_COLOR3;
+#else
+    return SDL_MapRGB(dst->format, TRIAD_DARK_GRAY);
+#endif
+}
+
+// theme_input_text colors the input field text: the theme's list text under
+// NextUI, white under MinUI.
+static SDL_Color theme_input_text(void)
+{
+#ifdef PLATFORM_NEXTUI
+    return uintToColour(THEME_COLOR4_255);
+#else
+    return COLOR_WHITE;
+#endif
+}
+
+// theme_key_bg colors a keyboard key background. A focused key mirrors the theme's
+// main color; an unfocused key uses the secondary accent track.
+static uint32_t theme_key_bg(SDL_Surface *dst, bool focused)
+{
+#ifdef PLATFORM_NEXTUI
+    (void)dst;
+    return focused ? THEME_COLOR1 : THEME_COLOR3;
+#else
+    return focused ? SDL_MapRGB(dst->format, TRIAD_WHITE)
+                   : SDL_MapRGB(dst->format, TRIAD_DARK_GRAY);
+#endif
+}
+
+// theme_key_text colors a keyboard key's text. A focused key uses the theme's
+// selected text; an unfocused key uses the list text.
+static SDL_Color theme_key_text(bool focused)
+{
+#ifdef PLATFORM_NEXTUI
+    return focused ? uintToColour(THEME_COLOR5_255) : uintToColour(THEME_COLOR4_255);
+#else
+    return focused ? COLOR_BLACK : COLOR_WHITE;
+#endif
+}
+
 SDL_Surface *screen = NULL;
 
 enum list_result_t
@@ -420,7 +487,7 @@ void draw_keyboard(SDL_Surface *screen, struct AppState *state)
     // draw keyboard title
     if (strlen(state->keyboard.title) > 0)
     {
-        SDL_Surface *title = TTF_RenderUTF8_Blended(font.large, state->keyboard.title, COLOR_WHITE);
+        SDL_Surface *title = TTF_RenderUTF8_Blended(font.large, state->keyboard.title, theme_title_text_color());
         SDL_Rect title_pos = {
             (screen->w - title->w) / 2, // center horizontally
             20,                         // 20px from top
@@ -433,7 +500,7 @@ void draw_keyboard(SDL_Surface *screen, struct AppState *state)
     // draw input field with current text
     // todo: use TTF_SizeUTF8 to compute the width of the input field
     SDL_Surface *input_placeholder = TTF_RenderUTF8_Blended(font.medium, "p", COLOR_WHITE);
-    SDL_Surface *input = TTF_RenderUTF8_Blended(font.medium, state->keyboard.current_text, COLOR_WHITE);
+    SDL_Surface *input = TTF_RenderUTF8_Blended(font.medium, state->keyboard.current_text, theme_input_text());
     SDL_Rect input_pos = {
         (screen->w) / 2,
         input_placeholder->h * 2,
@@ -452,7 +519,7 @@ void draw_keyboard(SDL_Surface *screen, struct AppState *state)
         input_placeholder->h * 2,
         screen->w - 80,
         input_placeholder->h};
-    SDL_FillRect(screen, &input_bg, SDL_MapRGB(screen->format, TRIAD_DARK_GRAY));
+    SDL_FillRect(screen, &input_bg, theme_input_bg(screen));
     SDL_BlitSurface(input, NULL, screen, &input_pos);
     SDL_FreeSurface(input);
 
@@ -513,7 +580,8 @@ void draw_keyboard(SDL_Surface *screen, struct AppState *state)
                 continue;
             }
 
-            SDL_Color text_color = (row == state->keyboard.row && col == state->keyboard.col) ? COLOR_BLACK : COLOR_WHITE;
+            bool focused = (row == state->keyboard.row && col == state->keyboard.col);
+            SDL_Color text_color = theme_key_text(focused);
             SDL_Surface *key_text = TTF_RenderUTF8_Blended(font.medium, key, text_color);
 
             // special keys are not the same width as the other keys
@@ -531,7 +599,7 @@ void draw_keyboard(SDL_Surface *screen, struct AppState *state)
                 default_key_size};
 
             // draw key background
-            Uint32 bg_color = (row == state->keyboard.row && col == state->keyboard.col) ? SDL_MapRGB(screen->format, TRIAD_WHITE) : SDL_MapRGB(screen->format, TRIAD_DARK_GRAY);
+            Uint32 bg_color = theme_key_bg(screen, focused);
             SDL_FillRect(screen, &key_pos, bg_color);
 
             // center text in key
