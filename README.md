@@ -12,6 +12,17 @@ This is a minui keyboard. It allows people to type values into a text field and 
 
 - todo: this is built inside-out. Ideally you can clone this into the MinUI workspace directory and build from there under each toolchain, but instead it gets cloned _into_ a toolchain workspace directory and built from there.
 
+The build platform is selected with `PLATFORM`, and the binary is named `minui-keyboard-$(PLATFORM)`. For example, `PLATFORM=tg5040 make` produces `minui-keyboard-tg5040`.
+
+## Supported platforms
+
+Binaries are built against one of two firmwares. Most devices build against MinUI (`shauninman/MinUI`). NextUI-specific binaries build against a NextUI toolchain and are suffixed with `-nextui`.
+
+- `tg5040` and `my355` run both firmwares, so they have a MinUI build (`minui-keyboard-tg5040`, `minui-keyboard-my355`) and a NextUI build (`minui-keyboard-tg5040-nextui`, `minui-keyboard-my355-nextui`).
+- `tg5050` and `h700` are NextUI-only and build as `minui-keyboard-tg5050-nextui` and `minui-keyboard-h700-nextui`.
+
+To build a NextUI variant, use its platform id inside the matching toolchain, for example `PLATFORM=tg5040-nextui make`. See [docs/nextui.md](docs/nextui.md) for the platform/toolchain matrix and how the NextUI builds are wired. For the native macOS build, see [docs/macos.md](docs/macos.md).
+
 ## Usage
 
 This tool is designed to be used as part of a larger minui app. It only supports an english keyboard layout, and has support for capitalized keys as well as many common special characters.
