@@ -130,3 +130,19 @@ mk() { # <VAR> <PLATFORM>
     mk SOURCE tg5040
     [[ "$output" != *'minui/workspace/all/common/config.c'* ]]
 }
+
+# issue 51: the keyboard theming is entirely gated on -DPLATFORM_NEXTUI, so guard
+# that every NextUI variant defines it (the remaining two beyond tg5040-nextui and
+# my355-nextui above) and that the greyscale macOS build does not.
+
+@test "tg5050-nextui and h700-nextui define PLATFORM_NEXTUI (theming gate)" {
+    mk CFLAGS tg5050-nextui
+    [[ "$output" == *'-DPLATFORM_NEXTUI'* ]]
+    mk CFLAGS h700-nextui
+    [[ "$output" == *'-DPLATFORM_NEXTUI'* ]]
+}
+
+@test "macos does not define PLATFORM_NEXTUI (keeps the greyscale palette)" {
+    mk CFLAGS macos
+    [[ "$output" != *'-DPLATFORM_NEXTUI'* ]]
+}
