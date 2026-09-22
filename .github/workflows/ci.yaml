@@ -74,7 +74,7 @@ jobs:
       - name: Move the codebase to the correct location
         run: |
           mkdir -p union-${{ matrix.toolchain }}-toolchain/workspace/repo
-          mv *.c Makefile union-${{ matrix.toolchain }}-toolchain/workspace/repo
+          mv *.c *.h Makefile union-${{ matrix.toolchain }}-toolchain/workspace/repo
 
       - name: Pull the toolchain
         run: |
@@ -158,8 +158,8 @@ jobs:
       - name: Install bats
         run: sudo apt-get update && sudo apt-get install -y bats
 
-      - name: Run Makefile wiring tests
-        run: bats tests/makefile.bats
+      - name: Run the test suites
+        run: bats tests/
 
   release:
     name: release

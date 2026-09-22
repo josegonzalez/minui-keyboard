@@ -14,11 +14,25 @@
 #include "defines.h"
 #include "api.h"
 #include "utils.h"
+#ifdef PLATFORM_NEXTUI
+#include "config.h"
+#endif
+
+#include "keyboard_layout.h"
 
 // Platform compatibility: tg5050 (NextUI) uses PWR_isOnline instead of PLAT_isOnline
 #ifdef PLATFORM_NEXTUI
 #define PLAT_isOnline PWR_isOnline
 #endif
+
+// KEYBOARD_ROWS is the number of key rows every layout has, and
+// KEYBOARD_COLUMNS the width of the layout arrays. Only the first
+// count_row_length() entries of a row hold a key; the rest are empty.
+#define KEYBOARD_ROWS 5
+#define KEYBOARD_COLUMNS 14
+
+// KEYBOARD_KEY_GAP is the space between keys and between rows, before scaling.
+#define KEYBOARD_KEY_GAP 2
 
 // Theme helpers. The -nextui builds honor the user's NextUI theme colors (exposed
 // by the SDK as THEME_COLOR* / THEME_COLOR*_255 after GFX_init loads the theme),
@@ -89,6 +103,94 @@ static SDL_Color theme_key_text(bool focused)
 
 SDL_Surface *screen = NULL;
 
+// Key font. The SDK opens font.* at fixed multiples of FIXED_SCALE, so those
+// faces track the device's scale factor but never its resolution. The keyboard
+// therefore opens its own face at a size derived from the computed key size,
+// which keeps the glyphs proportional to the keys on every panel.
+static TTF_Font *keyboard_font = NULL;
+static int keyboard_font_size = 0;
+
+// keyboard_font_path returns the file to draw the keys with: the user's themed
+// font under NextUI, the fixed MinUI face otherwise. Like the theme helpers
+// above, the NextUI-only symbols stay behind PLATFORM_NEXTUI so the MinUI and
+// macOS builds compile unchanged.
+//
+// The NextUI trees do not agree on how the themed font is exposed, and neither
+// defines FONT_PATH. The newer ones name the file (CFG_getFontFile); the
+// my355-latest branch only exposes an id that its own config.c resolves to
+// font1.ttf or font2.ttf. Each tree's default-font macro says which API it has.
+static const char *keyboard_font_path(void)
+{
+#if !defined(PLATFORM_NEXTUI)
+    return FONT_PATH;
+#elif defined(CFG_DEFAULT_FONT_FILE)
+    static char path[512];
+    snprintf(path, sizeof(path), "%s/%s", RES_PATH, CFG_getFontFile());
+    return path;
+#elif defined(CFG_DEFAULT_FONT_ID)
+    return (CFG_getFontId() == 1) ? RES_PATH "/font1.ttf" : RES_PATH "/font2.ttf";
+#else
+    // an unrecognized tree: try NextUI's default, and let keyboard_font_for
+    // fall back to the SDK font if it is not there
+    return RES_PATH "/font1.ttf";
+#endif
+}
+
+// keyboard_font_for returns a font whose line height matches key_size. The
+// factor is measured off the SDK's own medium font rather than hardcoded, so a
+// key box keeps the relationship to its glyph that it has always had. The face
+// is cached and reopened only when the size changes, which matters on devices
+// whose resolution can change at runtime, such as the h700 on HDMI.
+static TTF_Font *keyboard_font_for(int key_size)
+{
+    int base_height = (font.medium != NULL) ? TTF_FontHeight(font.medium) : 0;
+    if (base_height <= 0)
+    {
+        base_height = SCALE1(FONT_MEDIUM);
+    }
+
+    int size = SCALE1(FONT_MEDIUM) * key_size / base_height;
+    if (size < 1)
+    {
+        size = 1;
+    }
+
+    if (keyboard_font != NULL && keyboard_font_size == size)
+    {
+        return keyboard_font;
+    }
+
+    TTF_Font *opened = TTF_OpenFont(keyboard_font_path(), size);
+    if (opened == NULL)
+    {
+        // keep drawing with whatever we already have rather than crashing
+        return (keyboard_font != NULL) ? keyboard_font : font.medium;
+    }
+#if defined(PLATFORM_NEXTUI) && defined(CFG_DEFAULT_FONT_FILE)
+    // only the trees that name the font also expose its style
+    TTF_SetFontStyle(opened, CFG_getFontStyle());
+#endif
+
+    if (keyboard_font != NULL)
+    {
+        TTF_CloseFont(keyboard_font);
+    }
+    keyboard_font = opened;
+    keyboard_font_size = size;
+    return keyboard_font;
+}
+
+// keyboard_font_quit releases the key font
+static void keyboard_font_quit(void)
+{
+    if (keyboard_font != NULL)
+    {
+        TTF_CloseFont(keyboard_font);
+        keyboard_font = NULL;
+        keyboard_font_size = 0;
+    }
+}
+
 enum list_result_t
 {
     ExitCodeSuccess = 0,
@@ -123,7 +225,7 @@ void log_info(const char *msg)
 }
 
 // keyboard_layout_lowercase is the default keyboard layout
-const char *keyboard_layout_lowercase[5][14] = {
+const char *keyboard_layout_lowercase[KEYBOARD_ROWS][KEYBOARD_COLUMNS] = {
     {"`", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "=", "\0"},
     {"q", "w", "e", "r", "t", "y", "u", "i", "o", "p", "[", "]", "\\", "\0"},
     {"a", "s", "d", "f", "g", "h", "j", "k", "l", ";", "'", "\0", "\0", "\0"},
@@ -131,7 +233,7 @@ const char *keyboard_layout_lowercase[5][14] = {
     {"shift", "space", "enter", "\0", "\0", "\0", "\0", "\0", "\0", "\0", "\0", "\0", "\0", "\0"}};
 
 // keyboard_layout_uppercase is the uppercase keyboard layout
-const char *keyboard_layout_uppercase[5][14] = {
+const char *keyboard_layout_uppercase[KEYBOARD_ROWS][KEYBOARD_COLUMNS] = {
     {"~", "!", "@", "#", "$", "%", "^", "&", "*", "(", ")", "_", "+", "\0"},
     {"Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P", "{", "}", "|", "\0"},
     {"A", "S", "D", "F", "G", "H", "J", "K", "L", ":", "\"", "\0", "\0", "\0"},
@@ -141,7 +243,7 @@ const char *keyboard_layout_uppercase[5][14] = {
 // keyboard_layout_special is the special keyboard layout
 // note that some characters are not supported by the font in use by MinUI
 // so we omit those characters from the layout
-const char *keyboard_layout_special[5][14] = {
+const char *keyboard_layout_special[KEYBOARD_ROWS][KEYBOARD_COLUMNS] = {
     {"~", "!", "@", "#", "$", "%", "^", "&", "*", "(", ")", "_", "+", "\0"},
     {"{", "}", "|", "\\", "<", ">", "?", "\"", ";", ":", "[", "]", "\\", "\0"},
     {"±", "§", "¶", "©", "®", "™", "€", "£", "¥", "¢", "¤", "\0", "\0", "\0"},
@@ -181,10 +283,10 @@ int max(int a, int b)
 }
 
 // count_row_length returns the number of non-empty characters in a keyboard row
-int count_row_length(const char *(*layout)[14], int row)
+int count_row_length(const char *(*layout)[KEYBOARD_COLUMNS], int row)
 {
     int length = 0;
-    for (int i = 0; i < 14; i++)
+    for (int i = 0; i < KEYBOARD_COLUMNS; i++)
     {
         if (layout[row][i][0] != '\0')
         {
@@ -194,8 +296,20 @@ int count_row_length(const char *(*layout)[14], int row)
     return length;
 }
 
+// keyboard_widest_row returns the number of keys in the longest row of a
+// layout, which is what the key grid is sized against
+int keyboard_widest_row(const char *(*layout)[KEYBOARD_COLUMNS], int rows)
+{
+    int widest = 0;
+    for (int row = 0; row < rows; row++)
+    {
+        widest = max(widest, count_row_length(layout, row));
+    }
+    return widest;
+}
+
 // calculate_column_offset returns the offset between two rows
-int calculate_column_offset(const char *(*layout)[14], int from_row, int to_row)
+int calculate_column_offset(const char *(*layout)[KEYBOARD_COLUMNS], int from_row, int to_row)
 {
     int from_length = count_row_length(layout, from_row);
     int to_length = count_row_length(layout, to_row);
@@ -234,7 +348,7 @@ int adjust_offset_enter_last_row(int offset, int col, int center)
 }
 
 // get_current_layout returns the appropriate keyboard layout array based on the current state
-const char *(*get_current_layout(struct AppState *state))[14]
+const char *(*get_current_layout(struct AppState *state)) [KEYBOARD_COLUMNS]
 {
     if (state->keyboard.layout == 0)
     {
@@ -251,9 +365,9 @@ const char *(*get_current_layout(struct AppState *state))[14]
 }
 
 // cursor_rescue ensures the cursor lands on a valid key and doesn't get lost in empty space
-void cursor_rescue(struct AppState *state, const char *(*current_layout)[14], int num_rows)
+void cursor_rescue(struct AppState *state, const char *(*current_layout)[KEYBOARD_COLUMNS], int num_rows)
 {
-    int num_cols = sizeof(current_layout[0]) / sizeof(current_layout[0][0]);
+    int num_cols = KEYBOARD_COLUMNS;
 
     // Ensure row doesn't exceed boundaries
     if (state->keyboard.row < 0)
@@ -295,10 +409,10 @@ void handle_keyboard_input(struct AppState *state)
     state->redraw = 1;
 
     // track current keyboard layout
-    const char *(*current_layout)[14] = get_current_layout(state);
+    const char *(*current_layout)[KEYBOARD_COLUMNS] = get_current_layout(state);
 
-    int max_row = 5;
-    int max_col = sizeof(current_layout[0]) / sizeof(current_layout[0][0]);
+    int max_row = KEYBOARD_ROWS;
+    int max_col = KEYBOARD_COLUMNS;
 
     if (PAD_justRepeated(BTN_UP))
     {
@@ -361,7 +475,7 @@ void handle_keyboard_input(struct AppState *state)
         }
         else
         {
-            int last_col = 13;
+            int last_col = KEYBOARD_COLUMNS - 1;
             while (last_col >= 0 && current_layout[state->keyboard.row][last_col][0] == '\0')
             {
                 last_col--;
@@ -462,155 +576,145 @@ void handle_input(struct AppState *state)
     handle_keyboard_input(state);
 }
 
+// keyboard_is_special reports whether a key carries a word rather than a single
+// character. Those keys sit on the bottom row and are wider than the rest.
+bool keyboard_is_special(const char *key)
+{
+    return strcmp(key, "shift") == 0 || strcmp(key, "space") == 0 || strcmp(key, "enter") == 0;
+}
+
 // draw_keyboard interprets the app state and draws it as a keyboard to the screen
 void draw_keyboard(SDL_Surface *screen, struct AppState *state)
 {
-    // determine which keyboard layout to use based on current state
-    const char *(*current_layout)[14];
-    if (state->keyboard.layout == 0)
-    {
-        current_layout = keyboard_layout_lowercase;
-    }
-    else if (state->keyboard.layout == 1)
-    {
-        current_layout = keyboard_layout_uppercase;
-    }
-    else
-    {
-        current_layout = keyboard_layout_special;
-    }
-    const char *key = current_layout[state->keyboard.row][state->keyboard.col];
+    const char *(*current_layout)[KEYBOARD_COLUMNS] = get_current_layout(state);
+    bool has_title = strlen(state->keyboard.title) > 0;
+
+    // The geometry comes from the screen rather than from the font, so the
+    // keyboard fills the same share of every panel. A title and the hardware
+    // group share the top pill band, so either one reserves it.
+    struct KeyboardLayoutInput geometry = {
+        .screen_w = screen->w,
+        .screen_h = screen->h,
+        .padding = SCALE1(PADDING),
+        .pill_size = SCALE1(PILL_SIZE),
+        .gap = SCALE1(KEYBOARD_KEY_GAP),
+        .rows = KEYBOARD_ROWS,
+        .columns = keyboard_widest_row(current_layout, KEYBOARD_ROWS),
+        .reserve_top = (has_title || state->show_hardware_group) ? 1 : 0};
+    struct KeyboardLayout layout = keyboard_layout(&geometry);
+
+    TTF_Font *key_font = keyboard_font_for(layout.key_size);
 
     // draw the button group on the button-right
     GFX_blitButtonGroup((char *[]){"Y", "EXIT", "X", "ENTER", NULL}, 1, screen, 1);
 
-    // draw keyboard title
-    if (strlen(state->keyboard.title) > 0)
+    // draw keyboard title, centered in the band the hardware group draws into
+    if (has_title)
     {
         SDL_Surface *title = TTF_RenderUTF8_Blended(font.large, state->keyboard.title, theme_title_text_color());
-        SDL_Rect title_pos = {
-            (screen->w - title->w) / 2, // center horizontally
-            20,                         // 20px from top
-            title->w,
-            title->h};
-        SDL_BlitSurface(title, NULL, screen, &title_pos);
-        SDL_FreeSurface(title);
-    }
-
-    // draw input field with current text
-    // todo: use TTF_SizeUTF8 to compute the width of the input field
-    SDL_Surface *input_placeholder = TTF_RenderUTF8_Blended(font.medium, "p", COLOR_WHITE);
-    SDL_Surface *input = TTF_RenderUTF8_Blended(font.medium, state->keyboard.current_text, theme_input_text());
-    SDL_Rect input_pos = {
-        (screen->w) / 2,
-        input_placeholder->h * 2,
-        0,
-        input_placeholder->h};
-    if (input != NULL)
-    {
-        input_pos.x = (screen->w - input->w) / 2;
-        input_pos.w = input->w;
-        input_pos.h = input->h;
+        if (title != NULL)
+        {
+            SDL_Rect title_pos = {
+                (screen->w - title->w) / 2, // center horizontally
+                layout.title_y + (layout.title_h - title->h) / 2,
+                title->w,
+                title->h};
+            SDL_BlitSurface(title, NULL, screen, &title_pos);
+            SDL_FreeSurface(title);
+        }
     }
 
     // draw input field background
-    SDL_Rect input_bg = {
-        40,
-        input_placeholder->h * 2,
-        screen->w - 80,
-        input_placeholder->h};
+    SDL_Rect input_bg = {layout.input_x, layout.input_y, layout.input_w, layout.input_h};
     SDL_FillRect(screen, &input_bg, theme_input_bg(screen));
-    SDL_BlitSurface(input, NULL, screen, &input_pos);
-    SDL_FreeSurface(input);
 
-    // draw keyboard layout
-    int start_y = input_placeholder->h * 4;
-    int default_key_width = input_placeholder->w;
-    int default_key_height = input_placeholder->h;
-    int default_key_size = max(default_key_width, default_key_height);
-    int row_spacing = 5;
-    int column_spacing = 5;
-
-    int num_rows = 5;
-    int num_columns = 14;
-
-    // these special keys are not the same width as the other keys
-    // so we need to compute their width separately
-    // compute them here to avoid doing it conditionally for each row
-    int shift_width, space_width, enter_width;
-    TTF_SizeUTF8(font.medium, "shift", &shift_width, NULL);
-    TTF_SizeUTF8(font.medium, "space", &space_width, NULL);
-    TTF_SizeUTF8(font.medium, "enter", &enter_width, NULL);
-    int special_key_width = max(shift_width, max(space_width, enter_width)) + (column_spacing * 4);
-
-    for (int row = 0; row < num_rows; row++)
+    // draw input field with current text
+    SDL_Surface *input = TTF_RenderUTF8_Blended(key_font, state->keyboard.current_text, theme_input_text());
+    if (input != NULL)
     {
-        int len = 0;
+        int inner_padding = layout.gap * 4;
+        SDL_Rect input_pos = {
+            layout.input_x + (layout.input_w - input->w) / 2,
+            layout.input_y + (layout.input_h - input->h) / 2,
+            input->w,
+            input->h};
 
-        // Count non-null characters in the row
-        for (int i = 0; i < num_columns; i++)
+        // once the value outgrows the field, anchor it to the right edge so the
+        // end the user is typing stays visible, and clip it to the field so it
+        // cannot spill across the screen
+        if (input->w > layout.input_w - (inner_padding * 2))
         {
-            if (current_layout[row][i][0] != '\0')
-            {
-                len++;
-            }
+            input_pos.x = layout.input_x + layout.input_w - inner_padding - input->w;
         }
 
-        int total_width = (len * default_key_size) + ((len - 1) * column_spacing); // 5px between keys
-        if (row == 4)
+        SDL_Rect previous_clip;
+        SDL_GetClipRect(screen, &previous_clip);
+        SDL_SetClipRect(screen, &input_bg);
+        SDL_BlitSurface(input, NULL, screen, &input_pos);
+        SDL_SetClipRect(screen, &previous_clip);
+        SDL_FreeSurface(input);
+    }
+
+    // the special keys are as wide as their label needs, but never so wide that
+    // the three of them outgrow the grid
+    int shift_width = 0, space_width = 0, enter_width = 0;
+    TTF_SizeUTF8(key_font, "shift", &shift_width, NULL);
+    TTF_SizeUTF8(key_font, "space", &space_width, NULL);
+    TTF_SizeUTF8(key_font, "enter", &enter_width, NULL);
+    int special_key_width = max(shift_width, max(space_width, enter_width)) + (layout.gap * 4);
+    int special_key_limit = (layout.grid_w - (2 * layout.gap)) / 3;
+    if (special_key_width > special_key_limit)
+    {
+        special_key_width = special_key_limit;
+    }
+    if (special_key_width < layout.key_size)
+    {
+        special_key_width = layout.key_size;
+    }
+
+    for (int row = 0; row < KEYBOARD_ROWS; row++)
+    {
+        int len = count_row_length(current_layout, row);
+        if (len == 0)
         {
-            // compute row 4 differently
-            // row 4 has three buttons:
-            // - "shift"
-            // - "space"
-            // - "enter"
-            // so we need to account for the actual width of the buttons
-            // we can use TTF_SizeUTF8 to get the width of the buttons
-            // also we need to account for the padding between the keys
-            // as well as the margin on each of the 3 keys
-            total_width = (special_key_width * 3) + (2 * column_spacing);
+            continue;
         }
-        int start_x = (screen->w - total_width) / 2;
+
+        // rows are not all the same length, and the bottom row is not made of
+        // square keys, so measure the row before centering it in the grid
+        int row_width = (len - 1) * layout.gap;
+        for (int col = 0; col < len; col++)
+        {
+            row_width += keyboard_is_special(current_layout[row][col]) ? special_key_width : layout.key_size;
+        }
+
+        int x = keyboard_row_x(&layout, row_width);
+        int y = layout.grid_y + (row * (layout.key_size + layout.gap));
 
         for (int col = 0; col < len; col++)
         {
             const char *key = current_layout[row][col];
-            if (*key == '\0')
-            {
-                continue;
-            }
-
             bool focused = (row == state->keyboard.row && col == state->keyboard.col);
-            SDL_Color text_color = theme_key_text(focused);
-            SDL_Surface *key_text = TTF_RenderUTF8_Blended(font.medium, key, text_color);
-
-            // special keys are not the same width as the other keys
-            // so we need to compute their width separately
-            int current_key_width = default_key_size;
-            if (strcmp(key, "shift") == 0 || strcmp(key, "space") == 0 || strcmp(key, "enter") == 0)
-            {
-                current_key_width = special_key_width;
-            }
-
-            SDL_Rect key_pos = {
-                start_x + (col * (current_key_width + column_spacing)),
-                start_y + (row * (default_key_size + row_spacing)),
-                current_key_width,
-                default_key_size};
+            int key_width = keyboard_is_special(key) ? special_key_width : layout.key_size;
 
             // draw key background
-            Uint32 bg_color = theme_key_bg(screen, focused);
-            SDL_FillRect(screen, &key_pos, bg_color);
+            SDL_Rect key_pos = {x, y, key_width, layout.key_size};
+            SDL_FillRect(screen, &key_pos, theme_key_bg(screen, focused));
 
             // center text in key
-            SDL_Rect text_pos = {
-                key_pos.x + (current_key_width - key_text->w) / 2,
-                key_pos.y + (default_key_size - key_text->h) / 2,
-                key_text->w,
-                key_text->h};
+            SDL_Surface *key_text = TTF_RenderUTF8_Blended(key_font, key, theme_key_text(focused));
+            if (key_text != NULL)
+            {
+                SDL_Rect text_pos = {
+                    key_pos.x + (key_width - key_text->w) / 2,
+                    key_pos.y + (layout.key_size - key_text->h) / 2,
+                    key_text->w,
+                    key_text->h};
+                SDL_BlitSurface(key_text, NULL, screen, &text_pos);
+                SDL_FreeSurface(key_text);
+            }
 
-            SDL_BlitSurface(key_text, NULL, screen, &text_pos);
-            SDL_FreeSurface(key_text);
+            x += key_width + layout.gap;
         }
     }
 }
@@ -816,6 +920,7 @@ void init()
 // destruct cleans up the app state in reverse order
 void destruct()
 {
+    keyboard_font_quit();
     QuitSettings();
     PWR_quit();
     PAD_quit();

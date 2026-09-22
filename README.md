@@ -25,6 +25,8 @@ The `-nextui` binaries honor the device's NextUI theme, re-coloring the keyboard
 
 To build a NextUI variant, use its platform id inside the matching toolchain, for example `PLATFORM=tg5040-nextui make`. See [docs/nextui.md](docs/nextui.md) for the platform/toolchain matrix, the theming details, and how the NextUI builds are wired. For the native macOS build, see [docs/macos.md](docs/macos.md).
 
+The keyboard sizes itself to the screen rather than to the firmware font, so it fills the same share of every panel. See [docs/layout.md](docs/layout.md) for the geometry and how to check it.
+
 ## Usage
 
 This tool is designed to be used as part of a larger minui app. It only supports an english keyboard layout, and has support for capitalized keys as well as many common special characters.
