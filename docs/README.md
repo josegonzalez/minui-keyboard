@@ -1,5 +1,6 @@
 # Documentation
 
+- [layout.md](layout.md) - how the keyboard geometry is computed, and why it scales off the screen rather than the font
 - [macos.md](macos.md) - building and running minui-keyboard natively on macOS
 - [nextui.md](nextui.md) - NextUI-specific builds, the platform/toolchain matrix, theming, and how they are wired
 - [upstream-pins.md](upstream-pins.md) - the pinned upstream trees, why a stale pin breaks on device, and how to bump one

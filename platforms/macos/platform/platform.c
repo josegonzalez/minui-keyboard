@@ -71,23 +71,52 @@ static int device_height;
 static int device_pitch;
 static int rotate = 0;
 
-// macOS window size (4:3 aspect ratio, suitable for modern displays)
-#define WINDOW_WIDTH 800
-#define WINDOW_HEIGHT 600
-#define CONTENT_ASPECT_RATIO (4.0 / 3.0)
+// The emulated device geometry. FIXED_WIDTH, FIXED_HEIGHT, FIXED_SCALE and
+// PADDING in platform.h read these, so one binary can stand in for any panel.
+// The defaults are the 640x480 device this build has always emulated.
+int macos_screen_width = 640;
+int macos_screen_height = 480;
+int macos_screen_scale = 2;
+int macos_screen_padding = 10;
 
-// Calculate centered 4:3 destination rectangle for current window size
+// readScreenEnv overrides one geometry value from the environment, ignoring
+// anything that is not a positive integer.
+static void readScreenEnv(const char* name, int* out) {
+	const char* value = getenv(name);
+	if (value==NULL || *value=='\0') return;
+
+	char* end = NULL;
+	long parsed = strtol(value, &end, 10);
+	if (end==value || *end!='\0' || parsed<=0) return;
+
+	*out = (int)parsed;
+}
+
+// initScreenGeometry reads the emulated panel from MINUI_WIDTH, MINUI_HEIGHT,
+// MINUI_SCALE and MINUI_PADDING. Call it before anything reads FIXED_*.
+static void initScreenGeometry(void) {
+	readScreenEnv("MINUI_WIDTH", &macos_screen_width);
+	readScreenEnv("MINUI_HEIGHT", &macos_screen_height);
+	readScreenEnv("MINUI_SCALE", &macos_screen_scale);
+	readScreenEnv("MINUI_PADDING", &macos_screen_padding);
+}
+
+// macOS window width; the height follows the emulated panel's aspect ratio
+#define WINDOW_WIDTH 800
+#define CONTENT_ASPECT_RATIO ((double)FIXED_WIDTH / (double)FIXED_HEIGHT)
+
+// Calculate centered destination rectangle for current window size
 static SDL_Rect getContentRect(void) {
 	int win_w, win_h;
 	SDL_GetWindowSize(vid.window, &win_w, &win_h);
 
 	int dest_w, dest_h;
 	if ((double)win_w / win_h > CONTENT_ASPECT_RATIO) {
-		// Window is wider than 4:3 - pillarbox (black bars on sides)
+		// Window is wider than the panel - pillarbox (black bars on sides)
 		dest_h = win_h;
 		dest_w = (int)(win_h * CONTENT_ASPECT_RATIO);
 	} else {
-		// Window is taller than 4:3 - letterbox (black bars top/bottom)
+		// Window is taller than the panel - letterbox (black bars top/bottom)
 		dest_w = win_w;
 		dest_h = (int)(win_w / CONTENT_ASPECT_RATIO);
 	}
@@ -124,13 +153,16 @@ static int macOS_eventFilter(void* userdata, SDL_Event* event) {
 }
 
 SDL_Surface* PLAT_initVideo(void) {
+	initScreenGeometry();
+
 	SDL_InitSubSystem(SDL_INIT_VIDEO);
 	SDL_ShowCursor(0);
 
 	int w = FIXED_WIDTH;
 	int h = FIXED_HEIGHT;
 	int p = FIXED_PITCH;
-	vid.window   = SDL_CreateWindow("minui-keyboard", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
+	int window_h = (int)(WINDOW_WIDTH / CONTENT_ASPECT_RATIO);
+	vid.window   = SDL_CreateWindow("minui-keyboard", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, WINDOW_WIDTH, window_h, SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
 	vid.renderer = SDL_CreateRenderer(vid.window,-1,SDL_RENDERER_ACCELERATED|SDL_RENDERER_PRESENTVSYNC);
 
 	// SDL_RendererInfo info;
@@ -250,12 +282,25 @@ void PLAT_blitRenderer(GFX_Renderer* renderer) {
 	);
 }
 
+// saveScreenshot writes the frame at the emulated panel's own resolution to the
+// path in MINUI_SCREENSHOT, overwriting it each flip. That is how the layout is
+// checked and the README screenshots are regenerated at a device geometry the
+// developer does not have to hand; the window itself is scaled for the desktop.
+static void saveScreenshot(void) {
+	const char* path = getenv("MINUI_SCREENSHOT");
+	if (path==NULL || *path=='\0') return;
+
+	SDL_SaveBMP(vid.screen, path);
+}
+
 void PLAT_flip(SDL_Surface* IGNORED, int ignored) {
+	saveScreenshot();
+
 	// Clear to black for letterbox/pillarbox bars
 	SDL_SetRenderDrawColor(vid.renderer, 0, 0, 0, 255);
 	SDL_RenderClear(vid.renderer);
 
-	// Get the centered 4:3 destination rectangle
+	// Get the centered destination rectangle
 	SDL_Rect content_rect = getContentRect();
 
 	if (!vid.blit) {

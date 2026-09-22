@@ -53,7 +53,7 @@ ifeq ($(PLATFORM),macos)
 else
   ifeq (,$(CROSS_COMPILE))
     # the host-only targets below do not cross-compile, so they don't need a toolchain
-    ifeq (,$(filter clean print-%,$(MAKECMDGOALS)))
+    ifeq (,$(filter clean print-% test,$(MAKECMDGOALS)))
       $(error missing CROSS_COMPILE for this toolchain)
     endif
   endif
@@ -71,13 +71,13 @@ PRODUCT = $(TARGET)
 # macOS-specific configuration
 ifeq ($(PLATFORM),macos)
   INCDIR = -I. -Iplatforms/macos/include/ -Iminui/workspace/all/common/ -Iplatforms/macos/platform/ -Iinclude/ $(SDL_CFLAGS)
-  SOURCE = $(TARGET).c minui/workspace/all/common/scaler.c minui/workspace/all/common/utils.c minui/workspace/all/common/api.c platforms/macos/platform/platform.c
+  SOURCE = $(TARGET).c keyboard_layout.c minui/workspace/all/common/scaler.c minui/workspace/all/common/utils.c minui/workspace/all/common/api.c platforms/macos/platform/platform.c
   CFLAGS = $(ARCH) -fomit-frame-pointer
   CFLAGS += $(INCDIR) -DPLATFORM=\"$(WORKSPACE)\" -DUSE_$(SDL) -O3 -std=gnu99 -Wno-tautological-constant-out-of-range-compare -Wno-asm-operand-widths
   FLAGS = $(LIBS) $(SDL_LIBS) -lpthread -lm -lz
 else
   INCDIR = -I. -Iplatform/$(PLATFORM)/include/ -Iminui/workspace/all/common/ -Iminui/workspace/$(WORKSPACE)/platform/ -Iinclude/
-  SOURCE = $(TARGET).c minui/workspace/all/common/scaler.c minui/workspace/all/common/utils.c minui/workspace/all/common/api.c minui/workspace/$(WORKSPACE)/platform/platform.c
+  SOURCE = $(TARGET).c keyboard_layout.c minui/workspace/all/common/scaler.c minui/workspace/all/common/utils.c minui/workspace/all/common/api.c minui/workspace/$(WORKSPACE)/platform/platform.c
   FLAGS = -L$(LD_LIBRARY_PATH) -ldl -lmsettings $(LIBS) -l$(SDL) -l$(SDL)_image -l$(SDL)_ttf -lpthread -lm -lz
   # NextUI toolchains install libmsettings and the GLES stack to /opt/nextui.
   # api.c resamples audio through libsamplerate on every NextUI target. tg5050
@@ -127,11 +127,19 @@ clean:
 print-%:
 	@echo '$*=$($*)'
 
-# macOS resource setup - copies MinUI assets to the SDCARD_PATH location
+# Run the test suites. Host-only: the layout tests build tests/layout_probe.c
+# against keyboard_layout.c with the host compiler, and the wiring tests only
+# introspect this file, so neither needs a toolchain.
+test:
+	bats tests/
+
+# macOS resource setup - copies MinUI assets to the SDCARD_PATH location. Every
+# asset scale is copied, since the emulated panel (and so FIXED_SCALE) is chosen
+# at runtime; see docs/macos.md.
 setup-resources: minui
 ifeq ($(PLATFORM),macos)
 	mkdir -p /tmp/FAKESD/.system/res
-	cp minui/skeleton/SYSTEM/res/assets@2x.png /tmp/FAKESD/.system/res/
+	cp minui/skeleton/SYSTEM/res/assets@*x.png /tmp/FAKESD/.system/res/
 	cp minui/skeleton/SYSTEM/res/BPreplayBold-unhinted.otf /tmp/FAKESD/.system/res/
 	@echo "Resources installed to /tmp/FAKESD/.system/res"
 else

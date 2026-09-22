@@ -162,3 +162,13 @@ mk() { # <VAR> <PLATFORM>
     mk CFLAGS macos
     [[ "$output" != *'-DPLATFORM_NEXTUI'* ]]
 }
+
+# issue 54: the keyboard geometry lives in keyboard_layout.c, which every
+# platform has to compile - it is not gated on anything.
+
+@test "every platform compiles the keyboard layout source" {
+    for platform in tg5040 tg5040-nextui tg5050-nextui h700-nextui macos; do
+        mk SOURCE "$platform"
+        [[ "$output" == *'keyboard_layout.c'* ]]
+    done
+}

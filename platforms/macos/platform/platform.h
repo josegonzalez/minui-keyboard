@@ -103,9 +103,20 @@
 
 ///////////////////////////////
 
-#define FIXED_SCALE 	2
-#define FIXED_WIDTH		640
-#define FIXED_HEIGHT	480
+// The device geometry is a runtime value here so one macOS binary can stand in
+// for any supported panel, which is how the layout gets checked at every device
+// geometry without the hardware. Upstream does the same thing on the tg5040,
+// where FIXED_SCALE and friends read the runtime is_brick flag. The values come
+// from MINUI_WIDTH, MINUI_HEIGHT, MINUI_SCALE and MINUI_PADDING, and default to
+// the 640x480 device this build has always emulated.
+extern int macos_screen_width;
+extern int macos_screen_height;
+extern int macos_screen_scale;
+extern int macos_screen_padding;
+
+#define FIXED_SCALE 	macos_screen_scale
+#define FIXED_WIDTH		macos_screen_width
+#define FIXED_HEIGHT	macos_screen_height
 #define FIXED_BPP		2
 #define FIXED_DEPTH		(FIXED_BPP * 8)
 #define FIXED_PITCH		(FIXED_WIDTH * FIXED_BPP)
@@ -114,7 +125,7 @@
 ///////////////////////////////
 
 #define MAIN_ROW_COUNT 6
-#define PADDING 10
+#define PADDING macos_screen_padding
 
 ///////////////////////////////
 
