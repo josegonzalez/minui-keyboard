@@ -29,6 +29,9 @@ The keyboard sizes itself to the screen rather than to the firmware font, so it 
 
 ## Usage
 
+> [!WARNING]
+> stdout is not reliable for capturing output. The MinUI and NextUI internals this tool is built on log informational messages to stdout, and some platforms (for example `h700`) emit them on every run. Those lines are mixed in with the tool's output. Use `--write-location` to write the result to a file instead of capturing stdout.
+
 This tool is designed to be used as part of a larger minui app. It only supports an english keyboard layout, and has support for capitalized keys as well as many common special characters.
 
 ```shell
