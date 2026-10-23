@@ -58,13 +58,13 @@ mk() { # <VAR> <PLATFORM>
     [ "$output" = "PLATFORM=tg5040-nextui" ]
 }
 
-# my355-nextui: NextUI build for the Miyoo Flip (workspace lives on a branch)
+# my355-nextui: NextUI build for the Miyoo Flip (workspace lives in a fork)
 
-@test "my355-nextui uses loveRetro NextUI at the my355-latest branch" {
+@test "my355-nextui uses apommel NextUI at the pinned tag" {
     mk UPSTREAM_REPO my355-nextui
-    [ "$output" = "UPSTREAM_REPO=https://github.com/loveRetro/NextUI" ]
+    [ "$output" = "UPSTREAM_REPO=https://github.com/apommel/NextUI" ]
     mk UPSTREAM_VERSION my355-nextui
-    [ "$output" = "UPSTREAM_VERSION=my355-latest" ]
+    [ "$output" = "UPSTREAM_VERSION=my355-rc.6" ]
 }
 
 @test "my355-nextui builds the bare my355 workspace with the device id" {
