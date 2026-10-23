@@ -115,10 +115,8 @@ static int keyboard_font_size = 0;
 // above, the NextUI-only symbols stay behind PLATFORM_NEXTUI so the MinUI and
 // macOS builds compile unchanged.
 //
-// The NextUI trees do not agree on how the themed font is exposed, and neither
-// defines FONT_PATH. The newer ones name the file (CFG_getFontFile); the
-// my355-latest branch only exposes an id that its own config.c resolves to
-// font1.ttf or font2.ttf. Each tree's default-font macro says which API it has.
+// The NextUI trees do not define FONT_PATH. They name the themed font file
+// instead (CFG_getFontFile), which CFG_DEFAULT_FONT_FILE signals.
 static const char *keyboard_font_path(void)
 {
 #if !defined(PLATFORM_NEXTUI)
@@ -127,8 +125,6 @@ static const char *keyboard_font_path(void)
     static char path[512];
     snprintf(path, sizeof(path), "%s/%s", RES_PATH, CFG_getFontFile());
     return path;
-#elif defined(CFG_DEFAULT_FONT_ID)
-    return (CFG_getFontId() == 1) ? RES_PATH "/font1.ttf" : RES_PATH "/font2.ttf";
 #else
     // an unrecognized tree: try NextUI's default, and let keyboard_font_for
     // fall back to the SDK font if it is not there

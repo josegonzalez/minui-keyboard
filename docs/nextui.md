@@ -7,13 +7,13 @@ Some devices run NextUI, a fork of MinUI, instead of (or in addition to) MinUI. 
 | Platform id     | Firmware | Upstream repo              | Version / ref (Makefile var)            | Workspace dir | Toolchain image                        |
 |-----------------|----------|----------------------------|-----------------------------------------|---------------|----------------------------------------|
 | `tg5040-nextui` | NextUI   | `loveRetro/NextUI`         | `v6.14.0` (`NEXTUI_VERSION`)            | `tg5040`      | `savant/minui-toolchain:tg5040-nextui` |
-| `my355-nextui`  | NextUI   | `loveRetro/NextUI`         | `my355-latest` (`MY355_NEXTUI_VERSION`) | `my355`       | `savant/minui-toolchain:my355-nextui`  |
+| `my355-nextui`  | NextUI   | `apommel/NextUI`           | `my355-rc.6` (`MY355_NEXTUI_VERSION`)   | `my355`       | `savant/minui-toolchain:my355-nextui`  |
 | `tg5050-nextui` | NextUI   | `loveRetro/NextUI`         | `v6.14.0` (`NEXTUI_VERSION`)            | `tg5050`      | `savant/minui-toolchain:tg5050-nextui` |
 | `h700-nextui`   | NextUI   | `pvaibhav/NextUI`          | `h700-rc11` (`H700_VERSION`)            | `h700`        | `savant/minui-toolchain:h700-nextui`   |
 
 `tg5040` and `my355` also have MinUI builds (`minui-keyboard-tg5040`, `minui-keyboard-my355`) since those devices run both firmwares. `tg5050` and `h700` are NextUI-only.
 
-The `my355` workspace only exists on the `my355-latest` branch of `loveRetro/NextUI` (no tagged release contains it), so it uses its own version variable.
+The `my355` workspace is not part of any `loveRetro/NextUI` release, so it builds from the `apommel/NextUI` fork, which ships Miyoo Flip prereleases, and uses its own version variable.
 
 ## How the build is wired
 
